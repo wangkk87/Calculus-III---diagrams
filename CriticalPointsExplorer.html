@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Critical Points Explorer</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:#fafaf8;color:#1a1a18;padding:1.5rem}
+h1{font-size:20px;font-weight:500;margin-bottom:3px}
+.sub{font-size:13px;color:#5f5e5a;margin-bottom:1rem}
+.top-bar{display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap}
+.fn-input{flex:1;min-width:200px;font-family:monospace;font-size:14px;padding:8px 12px;border:0.5px solid rgba(0,0,0,0.2);border-radius:8px;background:#fff;color:#1a1a18;outline:none}
+.fn-input:focus{border-color:#378ADD;box-shadow:0 0 0 2px rgba(55,138,221,0.15)}
+.fn-input.err{border-color:#E24B4A;box-shadow:0 0 0 2px rgba(226,75,74,0.12)}
+.go-btn{padding:8px 18px;border:0.5px solid rgba(0,0,0,0.2);border-radius:8px;background:#fff;color:#1a1a18;cursor:pointer;font-size:14px}
+.go-btn:hover{background:#f1efe8}
+.presets{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.pb{font-size:12px;padding:5px 10px;border:0.5px solid rgba(0,0,0,0.15);border-radius:6px;background:transparent;color:#5f5e5a;cursor:pointer}
+.pb:hover{background:#f1efe8;color:#1a1a18}
+.pb.active{border-color:#378ADD;color:#185FA5;background:#E6F1FB}
+.main{display:grid;grid-template-columns:1fr 270px;gap:14px;align-items:start}
+@media(max-width:700px){.main{grid-template-columns:1fr}}
+canvas{width:100%;border-radius:10px;border:0.5px solid rgba(0,0,0,0.1);display:block;background:#fff;cursor:crosshair}
+.panel{display:flex;flex-direction:column;gap:10px}
+.card{background:#fff;border:0.5px solid rgba(0,0,0,0.1);border-radius:10px;padding:12px 14px}
+.ct{font-size:11px;color:#888780;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px}
+.brow{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.brow label{font-size:12px;color:#5f5e5a;width:56px;flex-shrink:0}
+.brow input[type=range]{flex:1;accent-color:#378ADD}
+.brow .bv{font-size:12px;font-weight:500;min-width:32px;text-align:right}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.met{background:#f1efe8;border-radius:7px;padding:8px 10px}
+.ml{font-size:11px;color:#5f5e5a;margin-bottom:1px}
+.mv{font-size:15px;font-weight:500}
+.vdict{border-radius:8px;padding:10px 12px;font-size:13px;font-weight:500;text-align:center}
+.v-min{background:#EAF3DE;color:#3B6D11}
+.v-max{background:#FAECE7;color:#993C1D}
+.v-sad{background:#FAEEDA;color:#854F0B}
+.v-inc{background:#f1efe8;color:#5f5e5a}
+.v-err{background:#FCEBEB;color:#A32D2D}
+.fbox{background:#f1efe8;border-radius:7px;padding:9px 12px;font-size:12px;line-height:1.8}
+.rot-row{display:flex;align-items:center;gap:6px;margin-top:8px}
+.rot-row label{font-size:12px;color:#5f5e5a;flex-shrink:0}
+.rot-row input{flex:1;accent-color:#378ADD}
+.errtip{font-size:12px;color:#A32D2D;margin-top:4px;min-height:16px}
+.hint{font-size:11px;color:#888780;margin-top:3px}
+</style>
+</head>
+<body>
+
+<h1>Critical points explorer</h1>
+<p class="sub">Enter any f(x,y) — click the surface or use sliders to probe partial derivatives & the second derivative test</p>
+
+<div class="top-bar">
+  <span style="font-size:14px;color:#5f5e5a;flex-shrink:0">f(x,y) =</span>
+  <input class="fn-input" id="fnin" value="x^2 + y^2" placeholder="e.g. x^2 - y^2  or  sin(x)*cos(y)">
+  <button class="go-btn" onclick="applyFn()">Plot</button>
+</div>
+<div class="errtip" id="errtip"></div>
+<p class="hint">Supported: + − * / ^, sin cos tan asin acos atan sqrt exp log abs — use x and y as variables. Press Enter to plot.</p>
+
+<div class="presets" style="margin-top:8px">
+  <button class="pb active" onclick="usePreset(this,'x^2 + y^2')">Paraboloid</button>
+  <button class="pb" onclick="usePreset(this,'x^2 - y^2')">Saddle</button>
+  <button class="pb" onclick="usePreset(this,'-x^2 - y^2')">Max bowl</button>
+  <button class="pb" onclick="usePreset(this,'x^3 - 3*x*y^2')">Monkey saddle</button>
+  <button class="pb" onclick="usePreset(this,'x^2 + x*y + y^2')">Mixed term</button>
+  <button class="pb" onclick="usePreset(this,'sin(x)*cos(y)')">sin·cos</button>
+  <button class="pb" onclick="usePreset(this,'x^2*y - y^3/3')">x²y − y³/3</button>
+</div>
+
+<div class="main">
+  <div>
+    <canvas id="c3d" height="400"></canvas>
+    <div class="rot-row">
+      <label>Rotate</label><input type="range" id="rot" min="0" max="360" value="35">
+      <label>Tilt</label><input type="range" id="tilt" min="5" max="80" value="38">
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="card">
+      <div class="ct">View bounds</div>
+      <div class="brow"><label>x: [<span id="vxl">-3.0</span>,</label><input type="range" id="xrange" min="1" max="10" step="0.5" value="3"><span class="bv"><span id="vxr">3.0</span>]</span></div>
+      <div class="brow"><label>y: [<span id="vyl">-3.0</span>,</label><input type="range" id="yrange" min="1" max="10" step="0.5" value="3"><span class="bv"><span id="vyr">3.0</span>]</span></div>
+      <div class="brow"><label>z-clip: ±</label><input type="range" id="zclip" min="1" max="30" step="0.5" value="10"><span class="bv" id="vzc">10.0</span></div>
+    </div>
+
+    <div class="card">
+      <div class="ct">Probe point — click surface or drag</div>
+      <div class="brow"><label>x₀</label><input type="range" id="px" min="-3" max="3" step="0.05" value="0"><span class="bv" id="vpx">0.00</span></div>
+      <div class="brow"><label>y₀</label><input type="range" id="py" min="-3" max="3" step="0.05" value="0"><span class="bv" id="vpy">0.00</span></div>
+      <div style="font-size:12px;color:#5f5e5a;margin-top:2px">f(x₀,y₀) = <span id="vfz" style="font-weight:500;color:#1a1a18">0.00</span></div>
+    </div>
+
+    <div class="card">
+      <div class="ct">Second derivative test at (x₀,y₀)</div>
+      <div class="mgrid">
+        <div class="met"><div class="ml">f<sub>xx</sub></div><div class="mv" id="mfxx">—</div></div>
+        <div class="met"><div class="ml">f<sub>yy</sub></div><div class="mv" id="mfyy">—</div></div>
+        <div class="met"><div class="ml">f<sub>xy</sub></div><div class="mv" id="mfxy">—</div></div>
+        <div class="met" style="border:1.5px solid #378ADD">
+          <div class="ml" style="color:#185FA5">D = f<sub>xx</sub>f<sub>yy</sub> − f<sub>xy</sub>²</div>
+          <div class="mv" style="color:#185FA5" id="mD">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="vdict" class="vdict v-inc">—</div>
+
+    <div class="card">
+      <div class="ct">Decision rules</div>
+      <div class="fbox">
+        D &gt; 0, f<sub>xx</sub> &gt; 0 → <b>local min</b><br>
+        D &gt; 0, f<sub>xx</sub> &lt; 0 → <b>local max</b><br>
+        D &lt; 0 → <b>saddle point</b><br>
+        D = 0 → <b>inconclusive</b>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c3d');
+const ctx = canvas.getContext('2d');
+let fnStr = 'x^2 + y^2';
+let compiledFn = null;
+let rotA = 35, tiltA = 38;
+let xR = 3, yR = 3, zClip = 10;
+let px0 = 0, py0 = 0;
+const N = 38;
+const h = 1e-4;
+
+function tokenize(s){
+  const tokens=[];let i=0;
+  while(i<s.length){
+    if(/\s/.test(s[i])){i++;continue;}
+    if(/[0-9.]/.test(s[i])){let n='';while(i<s.length&&/[0-9.]/.test(s[i]))n+=s[i++];tokens.push({t:'num',v:parseFloat(n)});}
+    else if(/[a-zA-Z]/.test(s[i])){let w='';while(i<s.length&&/[a-zA-Z]/.test(s[i]))w+=s[i++];tokens.push({t:'id',v:w});}
+    else tokens.push({t:'op',v:s[i++]});
+  }
+  return tokens;
+}
+
+function parse(expr){
+  const tokens=tokenize(expr);let pos=0;
+  const peek=()=>tokens[pos];const eat=()=>tokens[pos++];
+  function parseExpr(){return parseAdd();}
+  function parseAdd(){
+    let left=parseMul();
+    while(peek()&&peek().t==='op'&&(peek().v==='+'||peek().v==='-')){
+      const op=eat().v;const right=parseMul();
+      left=(op==='+')?((x,y)=>left(x,y)+right(x,y)):((x,y)=>left(x,y)-right(x,y));
+    }
+    return left;
+  }
+  function parseMul(){
+    let left=parsePow();
+    while(peek()&&peek().t==='op'&&(peek().v==='*'||peek().v==='/')){
+      const op=eat().v;const right=parsePow();
+      left=(op==='*')?((x,y)=>left(x,y)*right(x,y)):((x,y)=>left(x,y)/right(x,y));
+    }
+    return left;
+  }
+  function parsePow(){
+    let base=parseUnary();
+    if(peek()&&peek().t==='op'&&peek().v==='^'){eat();const exp=parsePow();return(x,y)=>Math.pow(base(x,y),exp(x,y));}
+    return base;
+  }
+  function parseUnary(){
+    if(peek()&&peek().t==='op'&&peek().v==='-'){eat();const a=parseAtom();return(x,y)=>-a(x,y);}
+    if(peek()&&peek().t==='op'&&peek().v==='+'){eat();return parseAtom();}
+    return parseAtom();
+  }
+  const fns1={sin:Math.sin,cos:Math.cos,tan:Math.tan,asin:Math.asin,acos:Math.acos,atan:Math.atan,sqrt:Math.sqrt,exp:Math.exp,log:Math.log,ln:Math.log,abs:Math.abs};
+  function parseAtom(){
+    const tok=peek();
+    if(!tok) throw new Error('Unexpected end');
+    if(tok.t==='num'){eat();return()=>tok.v;}
+    if(tok.t==='id'){
+      eat();
+      if(tok.v==='x') return(x)=>x;
+      if(tok.v==='y') return(_,y)=>y;
+      if(tok.v==='pi'||tok.v==='PI') return()=>Math.PI;
+      if(tok.v==='e') return()=>Math.E;
+      if(fns1[tok.v]){
+        const fn=fns1[tok.v];
+        if(peek()&&peek().t==='op'&&peek().v==='('){eat();const arg=parseExpr();if(peek()&&peek().v===')') eat();return(x,y)=>fn(arg(x,y));}
+        throw new Error('Expected ( after '+tok.v);
+      }
+      throw new Error('Unknown identifier: '+tok.v);
+    }
+    if(tok.t==='op'&&tok.v==='('){eat();const a=parseExpr();if(peek()&&peek().v===')') eat();return a;}
+    throw new Error('Unexpected token: '+tok.v);
+  }
+  const fn=parseExpr();
+  if(pos<tokens.length) throw new Error('Unexpected token: '+tokens[pos].v);
+  return fn;
+}
+
+function tryCompile(s){
+  try{const fn=parse(s.trim());fn(0,0);return{ok:true,fn};}
+  catch(e){return{ok:false,msg:e.message};}
+}
+
+function applyFn(){
+  const s=document.getElementById('fnin').value;
+  const r=tryCompile(s);
+  const el=document.getElementById('fnin'),tip=document.getElementById('errtip');
+  if(!r.ok){el.classList.add('err');tip.textContent='Error: '+r.msg;return;}
+  el.classList.remove('err');tip.textContent='';
+  fnStr=s;compiledFn=r.fn;
+  document.querySelectorAll('.pb').forEach(b=>b.classList.remove('active'));
+  updateProbeSliderBounds();draw();updateProbe();
+}
+
+function usePreset(btn,s){
+  document.querySelectorAll('.pb').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('fnin').value=s;
+  document.getElementById('errtip').textContent='';
+  document.getElementById('fnin').classList.remove('err');
+  fnStr=s;compiledFn=tryCompile(s).fn;
+  updateProbeSliderBounds();draw();updateProbe();
+}
+
+function safeF(x,y){
+  try{const v=compiledFn(x,y);return isFinite(v)?Math.max(-zClip,Math.min(zClip,v)):null;}
+  catch{return null;}
+}
+
+function project(x,y,z,W,H){
+  const cosR=Math.cos(rotA*Math.PI/180),sinR=Math.sin(rotA*Math.PI/180);
+  const cosT=Math.cos(tiltA*Math.PI/180),sinT=Math.sin(tiltA*Math.PI/180);
+  const rx=x*cosR-y*sinR,ry=x*sinR+y*cosR;
+  const scale=W*0.22;
+  return[W*0.5+rx*scale,H*0.52+(ry*sinT-z*cosT)*scale];
+}
+
+function getColor(z,zmin,zmax){
+  const t=Math.max(0,Math.min(1,(z-zmin)/(zmax-zmin||1)));
+  const r=Math.round(50+t*180),g=Math.round(90+t*110),b=Math.round(200-t*110);
+  return`rgba(${r},${g},${b},0.76)`;
+}
+
+function draw(){
+  if(!compiledFn) return;
+  const dpr=window.devicePixelRatio||1;
+  const W=canvas.offsetWidth,H=400;
+  canvas.width=W*dpr;canvas.height=H*dpr;
+  ctx.scale(dpr,dpr);ctx.clearRect(0,0,W,H);
+
+  const step2x=xR*2/N,step2y=yR*2/N;
+  const vals=[];let zmin=Infinity,zmax=-Infinity;
+  for(let i=0;i<=N;i++){vals[i]=[];for(let j=0;j<=N;j++){
+    const x=-xR+i*step2x,y=-yR+j*step2y;
+    const z=safeF(x,y);vals[i][j]=z;
+    if(z!==null){zmin=Math.min(zmin,z);zmax=Math.max(zmax,z);}
+  }}
+
+  const faces=[];
+  for(let i=0;i<N;i++) for(let j=0;j<N;j++){
+    const z00=vals[i][j],z10=vals[i+1][j],z01=vals[i][j+1],z11=vals[i+1][j+1];
+    if(z00===null||z10===null||z01===null||z11===null) continue;
+    const avgZ=(z00+z10+z01+z11)/4;
+    const x0=-xR+i*step2x,y0=-yR+j*step2y,x1=x0+step2x,y1=y0+step2y;
+    const cosR=Math.cos(rotA*Math.PI/180),sinR=Math.sin(rotA*Math.PI/180);
+    const cosT=Math.cos(tiltA*Math.PI/180),sinT=Math.sin(tiltA*Math.PI/180);
+    const cx=(x0+x1)/2,cy=(y0+y1)/2;
+    const depth=cx*sinR*sinT+cy*cosR*sinT-avgZ*cosT;
+    faces.push({x0,y0,x1,y1,z00,z10,z01,z11,avgZ,depth});
+  }
+  faces.sort((a,b)=>a.depth-b.depth);
+
+  for(const f of faces){
+    const p00=project(f.x0,f.y0,f.z00,W,H),p10=project(f.x1,f.y0,f.z10,W,H);
+    const p11=project(f.x1,f.y1,f.z11,W,H),p01=project(f.x0,f.y1,f.z01,W,H);
+    ctx.beginPath();ctx.moveTo(p00[0],p00[1]);ctx.lineTo(p10[0],p10[1]);
+    ctx.lineTo(p11[0],p11[1]);ctx.lineTo(p01[0],p01[1]);ctx.closePath();
+    ctx.fillStyle=getColor(f.avgZ,zmin,zmax);ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.14)';ctx.lineWidth=0.4;ctx.stroke();
+  }
+
+  const pz=safeF(px0,py0);
+  if(pz!==null){
+    const cp=project(px0,py0,pz,W,H);
+    const fxx=numFxx(px0,py0),fyy=numFyy(px0,py0),fxy=numFxy(px0,py0);
+    const D=(fxx!==null&&fyy!==null&&fxy!==null)?fxx*fyy-fxy*fxy:null;
+    let dc='#888780';
+    if(D!==null&&isFinite(D)){
+      if(Math.abs(D)<1e-4) dc='#888780';
+      else if(D<0) dc='#BA7517';
+      else if(fxx>0) dc='#1D9E75';
+      else dc='#D85A30';
+    }
+    ctx.beginPath();ctx.arc(cp[0],cp[1],7,0,Math.PI*2);
+    ctx.fillStyle=dc;ctx.fill();
+    ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+    ctx.fillStyle='rgba(0,0,0,0.5)';ctx.font='12px system-ui';
+    ctx.fillText(`(${px0.toFixed(2)}, ${py0.toFixed(2)})`,cp[0]+10,cp[1]-6);
+  }
+}
+
+function numFx(x,y){const f1=safeF(x+h,y),f2=safeF(x-h,y);return(f1!==null&&f2!==null)?(f1-f2)/(2*h):null;}
+function numFy(x,y){const f1=safeF(x,y+h),f2=safeF(x,y-h);return(f1!==null&&f2!==null)?(f1-f2)/(2*h):null;}
+function numFxx(x,y){const f1=safeF(x+h,y),f0=safeF(x,y),f2=safeF(x-h,y);return(f1!==null&&f0!==null&&f2!==null)?(f1-2*f0+f2)/(h*h):null;}
+function numFyy(x,y){const f1=safeF(x,y+h),f0=safeF(x,y),f2=safeF(x,y-h);return(f1!==null&&f0!==null&&f2!==null)?(f1-2*f0+f2)/(h*h):null;}
+function numFxy(x,y){
+  const fpp=safeF(x+h,y+h),fpm=safeF(x+h,y-h),fmp=safeF(x-h,y+h),fmm=safeF(x-h,y-h);
+  return(fpp!==null&&fpm!==null&&fmp!==null&&fmm!==null)?(fpp-fpm-fmp+fmm)/(4*h*h):null;
+}
+
+function fmt(v){if(v===null||!isFinite(v)) return'—';return v.toFixed(4);}
+
+function updateProbe(){
+  if(!compiledFn) return;
+  document.getElementById('vpx').textContent=px0.toFixed(2);
+  document.getElementById('vpy').textContent=py0.toFixed(2);
+  const fz=safeF(px0,py0);
+  document.getElementById('vfz').textContent=fz!==null?fz.toFixed(4):'—';
+  const fxx=numFxx(px0,py0),fyy=numFyy(px0,py0),fxy=numFxy(px0,py0);
+  document.getElementById('mfxx').textContent=fmt(fxx);
+  document.getElementById('mfyy').textContent=fmt(fyy);
+  document.getElementById('mfxy').textContent=fmt(fxy);
+  const D=(fxx!==null&&fyy!==null&&fxy!==null)?fxx*fyy-fxy*fxy:null;
+  document.getElementById('mD').textContent=fmt(D);
+  const v=document.getElementById('vdict');
+  if(D===null){v.className='vdict v-err';v.textContent='Cannot evaluate at this point';return;}
+  const eps=1e-4;
+  if(Math.abs(D)<eps){v.className='vdict v-inc';v.textContent='Inconclusive  (D ≈ 0)';}
+  else if(D<0){v.className='vdict v-sad';v.textContent='Saddle point  (D < 0)';}
+  else if(fxx>0){v.className='vdict v-min';v.textContent='Local minimum  (D > 0, fxx > 0)';}
+  else{v.className='vdict v-max';v.textContent='Local maximum  (D > 0, fxx < 0)';}
+}
+
+function updateProbeSliderBounds(){
+  const pxEl=document.getElementById('px'),pyEl=document.getElementById('py');
+  pxEl.min=-xR;pxEl.max=xR;pyEl.min=-yR;pyEl.max=yR;
+  if(parseFloat(pxEl.value)<-xR) pxEl.value=-xR;
+  if(parseFloat(pxEl.value)>xR) pxEl.value=xR;
+  if(parseFloat(pyEl.value)<-yR) pyEl.value=-yR;
+  if(parseFloat(pyEl.value)>yR) pyEl.value=yR;
+}
+
+document.getElementById('fnin').addEventListener('keydown',e=>{if(e.key==='Enter') applyFn();});
+document.getElementById('xrange').addEventListener('input',function(){
+  xR=parseFloat(this.value);
+  document.getElementById('vxl').textContent=(-xR).toFixed(1);
+  document.getElementById('vxr').textContent=xR.toFixed(1);
+  updateProbeSliderBounds();draw();
+});
+document.getElementById('yrange').addEventListener('input',function(){
+  yR=parseFloat(this.value);
+  document.getElementById('vyl').textContent=(-yR).toFixed(1);
+  document.getElementById('vyr').textContent=yR.toFixed(1);
+  updateProbeSliderBounds();draw();
+});
+document.getElementById('zclip').addEventListener('input',function(){
+  zClip=parseFloat(this.value);
+  document.getElementById('vzc').textContent=zClip.toFixed(1);
+  draw();
+});
+document.getElementById('rot').addEventListener('input',function(){rotA=parseFloat(this.value);draw();});
+document.getElementById('tilt').addEventListener('input',function(){tiltA=parseFloat(this.value);draw();});
+document.getElementById('px').addEventListener('input',function(){px0=parseFloat(this.value);updateProbe();draw();});
+document.getElementById('py').addEventListener('input',function(){py0=parseFloat(this.value);updateProbe();draw();});
+
+canvas.addEventListener('click',function(e){
+  const rect=canvas.getBoundingClientRect();
+  const mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  const W=canvas.offsetWidth,H=400;
+  let best=Infinity,bx=px0,by=py0;
+  const step2x=xR*2/N,step2y=yR*2/N;
+  for(let i=0;i<=N;i++) for(let j=0;j<=N;j++){
+    const x=-xR+i*step2x,y=-yR+j*step2y;
+    const z=safeF(x,y);if(z===null) continue;
+    const p=project(x,y,z,W,H);
+    const d=(p[0]-mx)**2+(p[1]-my)**2;
+    if(d<best){best=d;bx=x;by=y;}
+  }
+  if(best<2500){
+    px0=parseFloat(bx.toFixed(2));py0=parseFloat(by.toFixed(2));
+    document.getElementById('px').value=px0;
+    document.getElementById('py').value=py0;
+    updateProbe();draw();
+  }
+});
+
+compiledFn=tryCompile(fnStr).fn;
+draw();updateProbe();
+window.addEventListener('resize',()=>draw());
+</script>
+</body>
+</html>
