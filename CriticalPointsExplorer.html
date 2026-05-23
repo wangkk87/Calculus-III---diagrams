@@ -165,7 +165,7 @@ function parse(expr){
   }
   function parsePow(){
     let base=parseUnary();
-    if(peek()&&peek().t==='op'&&peek().v==='^'){eat();const exp=parsePow();return(x,y)=>Math.pow(base(x,y),exp(x,y));}
+    if(peek()&&peek().t==='op'&&peek().v==='^'){eat();const exp=parseUnary();return(x,y)=>Math.pow(base(x,y),exp(x,y));}
     return base;
   }
   function parseUnary(){
